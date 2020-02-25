@@ -75,16 +75,31 @@ type CircuitCounters struct {
 	Rejection int64
 }
 
-// NewCircuitBreaker returns CircuitBreaker with default settings
-func NewCircuitBreaker() *CircuitBreaker {
-	// Currently only supports default settings
+// NewDefaultCircuitBreaker returns circuitbreaker with default settings
+func NewDefaultCircuitBreaker() *CircuitBreaker {
 	return &CircuitBreaker{
 		circuitName:  "Service-B Proxy",
 		currentState: stateClose,
 		currentTime:  time.Now(),
 
-		tripCircuit:   defaultTrip,
-		untripCircuit: defaultUntrip,
+		tripCircuit: func(counter CircuitCounters) bool {
+			fail := float64(counter.Failure)
+			success := float64(counter.Success)
+
+			if (fail+success > 0) && fail/(fail+success) >= 0.50 {
+				return true
+			}
+			return false
+		},
+		untripCircuit: func(counter CircuitCounters) bool {
+			fail := float64(counter.Failure)
+			success := float64(counter.Success)
+
+			if (fail+success > 0) && success/(fail+success) >= 0.50 {
+				return true
+			}
+			return false
+		},
 
 		openTime: 1 * time.Second,
 		counters: &CircuitCounters{},
@@ -92,20 +107,20 @@ func NewCircuitBreaker() *CircuitBreaker {
 	}
 }
 
-func defaultTrip(counter CircuitCounters) bool {
-	fail := float64(counter.Failure)
-	success := float64(counter.Success)
+// NewCircuitBreaker returns circuitbreaker with custom settings
+func NewCircuitBreaker(circuitName string, tripFunc, untripFunc func(CircuitCounters) bool, openT int) *CircuitBreaker {
+	return &CircuitBreaker{
+		circuitName:  circuitName,
+		currentState: stateClose,
+		currentTime:  time.Now(),
 
-	if (fail+success > 0) && fail/(fail+success) >= 0.50 {
-		return true
+		tripCircuit:   tripFunc,
+		untripCircuit: untripFunc,
+
+		openTime: time.Duration(openT) * time.Second,
+		counters: &CircuitCounters{},
+		lock:     &sync.Mutex{},
 	}
-	return false
-}
-func defaultUntrip(counter CircuitCounters) bool {
-	if counter.Success > 1 {
-		return true
-	}
-	return false
 }
 
 /*
