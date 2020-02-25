@@ -33,7 +33,7 @@ func Get(url string) ([]byte, error) {
 }
 func main() {
 
-	b, err := Get("http://172.16.0.100:8080")
+	b, err := Get("http://127.0.0.1:8080")
 	if err != nil {
 		fmt.Println(err)
 	}
