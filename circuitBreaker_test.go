@@ -1,7 +1,6 @@
 package circuitbreaker
 
 import (
-	"errors"
 	"testing"
 	"time"
 
@@ -61,6 +60,7 @@ func TestSpark_DefaultSettings(t *testing.T) {
 
 	// validate that circuit tripped
 	assert.NotNil(t, err, "Received error from fail call")
+	assert.Equal(t, err, errFailed, "Error in sending request")
 	assert.Equal(t, cb.counters, &CircuitCounters{Failure: 0, Success: 0, Timeout: 0, Rejection: 0}, "State should be closed after successful requests")
 	assert.Equal(t, cb.currentState, stateOpen, "Circuit should trip if error rate exceeds 50%")
 
@@ -72,6 +72,7 @@ func TestSpark_DefaultSettings(t *testing.T) {
 
 	// validate request should fail as circuit in open state
 	assert.NotNil(t, err, "Received error from success call")
+	assert.Equal(t, err, errOpen, "Circuit in open state should fail request")
 	assert.Equal(t, cb.counters, &CircuitCounters{Failure: 0, Success: 0, Timeout: 0, Rejection: 0}, "State should be closed after successful requests")
 	assert.Equal(t, cb.currentState, stateOpen, "Circuit should trip if error rate exceeds 50%")
 
@@ -89,6 +90,7 @@ func TestSpark_DefaultSettings(t *testing.T) {
 	// validate if circuit tripped to open state with even
 	// 1 fail request in half-open state
 	assert.NotNil(t, err, "Received error from fail call")
+	assert.Equal(t, err, errFailed, "Circuit in open state should fail request")
 	assert.Equal(t, cb.counters, &CircuitCounters{Failure: 0, Success: 0, Timeout: 0, Rejection: 0}, "State should be closed after successful requests")
 	assert.Equal(t, cb.currentState, stateOpen, "Circuit should trip if error rate exceeds 50%")
 
@@ -151,12 +153,14 @@ func TestSpark_CustomSettings(t *testing.T) {
 
 	// validate circuit state based on custom defined trip function
 	assert.NotNil(t, err, "Received error from fail call")
+	assert.Equal(t, err, errFailed, "Request to service failed")
 	assert.Equal(t, cb.counters, &CircuitCounters{Failure: 1, Success: 1, Timeout: 0, Rejection: 0}, "State should be closed after successful requests")
 	assert.Equal(t, cb.currentState, stateClose, "Circuit should not trip if error rate did not exceeds 50%")
 
 	// circuit will trip based on custom defined trip function if one more fail request is passed
 	_, err = cb.Spark(doFailCall)
 	assert.NotNil(t, err, "Received error from fail call")
+	assert.Equal(t, err, errFailed, "Request to service failed")
 	assert.Equal(t, cb.counters, &CircuitCounters{Failure: 0, Success: 0, Timeout: 0, Rejection: 0}, "State should be closed after successful requests")
 	assert.Equal(t, cb.currentState, stateOpen, "Circuit should trip if error rate exceeds 50%")
 
@@ -191,6 +195,7 @@ func TestSpark_CustomSettings(t *testing.T) {
 	// validate if circuit tripped to open state with even
 	// 1 fail request in half-open state
 	assert.NotNil(t, err, "Received error from fail call")
+	assert.Equal(t, err, errFailed, "request to service failed")
 	assert.Equal(t, cb.counters, &CircuitCounters{Failure: 0, Success: 0, Timeout: 0, Rejection: 0}, "State should be closed after successful requests")
 	assert.Equal(t, cb.currentState, stateOpen, "Circuit should trip if error rate exceeds 50%")
 
@@ -247,7 +252,7 @@ func doSuccessCall() (interface{}, error) {
 
 func doFailCall() (interface{}, error) {
 	// heavy load function with error
-	return nil, errors.New("Some Error")
+	return nil, errFailed
 }
 
 func doPanicCall() (interface{}, error) {

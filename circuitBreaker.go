@@ -26,6 +26,7 @@ import (
 
 var (
 	errFailed error = errors.New("Failed!! got error")
+	errOpen   error = errors.New("Circuit Open")
 )
 
 // State defines the state of the circuit
@@ -139,7 +140,7 @@ func NewCircuitBreaker(circuitName string, tripFunc, untripFunc func(CircuitCoun
 func (cb *CircuitBreaker) Spark(request func() (interface{}, error)) (interface{}, error) {
 	if isOpen(cb) {
 		// create a constant error
-		return nil, errors.New("error circuit open")
+		return nil, errOpen
 	}
 
 	req, err := request()
