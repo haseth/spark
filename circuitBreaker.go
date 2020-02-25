@@ -1,11 +1,21 @@
-// CircuitBreaker package implements circuit breaker pattern which
-// acts as a proxy for a particular service. It trips the circuit
-// if the request is likely to fail. In circuit tripped state the
-// requests would be failed. After some halt time the circuit is
-// partially closed and allows the request to pass, if fails then
-// circuit trips again. Circuit counters will determine the status
-// of the service.
+/*
+	CircuitBreaker package implements circuit breaker pattern which
+	acts as a proxy for a particular remote service. It trips the circuit
+	if requests are likely to be failed to remote service and untrips it
+	after requests would be successful.
 
+	Trip function is used to open the circuit based on the circuit counters
+	Ex. if fail/(fail+success) > 0.5, trip circuit.
+
+	Circuit remains in open state for OpenTime duration and then changes
+	to half-open state where the service is monitored.
+
+	UnTrip function is used to close the circuit from half-open state based on
+	the circuit counters.
+	Ex. if success/(fail+success) > 0.9, untrip circuit if tripped.
+
+	Circuit counters will determine the status of the service.
+*/
 package circuitbreaker
 
 import (
@@ -18,9 +28,8 @@ var (
 	errFailed error = errors.New("Failed!! got error")
 )
 
-/*
- State defines the state of the service proxy
-*/
+// State defines the state of the circuit
+// i.e. Open, Close or half-open
 type State int
 
 const (
@@ -37,37 +46,36 @@ func (s State) String() string {
 }
 
 /*
- 	CircuitBreaker acts a proxy for the request to a particular service
-	and opens the circuit if request is likely to fail
-	else lets the request pass the circuit if mostly successful
-	Half-open state acts as a transition state from Open to Close State
+ 	CircuitBreaker acts as proxy for requests to a particular service.
+	It opens the circuit if requests are likely to get fail otherwise
+	allows the requests to pass the circuit.
 */
 type CircuitBreaker struct {
-	// UNIQUELY IDENTIFY CIRCUIT
 	circuitName string
 
-	// CURRENT CIRCUIT DATA
 	currentState State
 	currentTime  time.Time
 	counters     *CircuitCounters
 
-	// CLOSE TO OPEN FUNCTION
+	// func to transit circuit state from close to open state
 	tripCircuit func(CircuitCounters) bool
 
-	// HALF-OPEN TO CLOSE FUNCTION
+	// func to transit circuit state from half-open to close state
 	untripCircuit func(CircuitCounters) bool
 
-	// OPEN TO HALF_OPEN DURATION
+	// time duration for circuit to be in open state before transit
+	// to half-open state
 	openTime time.Duration
 
 	lock *sync.Mutex
 }
 
 /*
-	CircuitCounters defines all the counters
-	which is used to determine the health of
+	CircuitCounters are counters for the circuit
+	which is used to determine/change the state of
 	circuit.
 */
+// TODO implement Timeout and Rejection counter feedback to circuit
 type CircuitCounters struct {
 	Failure   int64
 	Success   int64
@@ -124,9 +132,9 @@ func NewCircuitBreaker(circuitName string, tripFunc, untripFunc func(CircuitCoun
 }
 
 /*
-	Spark the request in the circuit
-	if the circuit is close/half-open request would be passed
-	if the circuit is open request would be failed
+	Spark requests in the circuit of remote service
+	if the circuit is in close/half-open state request would be passed
+	else if the circuit is in open state request would be failed
 */
 func (cb *CircuitBreaker) Spark(request func() (interface{}, error)) (interface{}, error) {
 	if isOpen(cb) {
@@ -183,8 +191,8 @@ func onSuccess(cb *CircuitBreaker) {
 	updateState(cb)
 }
 
-// Whenever state changes we reset the counters
 func updateState(cb *CircuitBreaker) {
+	// whenever state changes we reset the counters
 	switch cb.currentState {
 	case stateClose:
 		if cb.tripCircuit(*cb.counters) {
@@ -212,8 +220,8 @@ func updateState(cb *CircuitBreaker) {
 	}
 }
 
-// ResetCounters reset the counters for the circuit
-// It is invoked when state changes.
+// ResetCounters will reset circuit counters
+// It is invoked when state changes
 func (cb *CircuitBreaker) ResetCounters() {
 	cb.counters.Failure = 0
 	cb.counters.Success = 0
