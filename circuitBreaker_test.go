@@ -104,5 +104,4 @@ func TestState(t *testing.T) {
 
 	s = State(3)
 	assert.Equal(t, s.String(), "incorrect state requested", "Received state name half-open correctly")
-
 }

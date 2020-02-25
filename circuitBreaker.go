@@ -10,8 +10,6 @@ package circuitbreaker
 
 import (
 	"errors"
-	"fmt"
-	_ "fmt"
 	"sync"
 	"time"
 )
@@ -139,8 +137,8 @@ func (cb *CircuitBreaker) Spark(request func() (interface{}, error)) (interface{
 	return req, nil
 }
 
-// isOpen veirifies if circuit is open or not
 func isOpen(cb *CircuitBreaker) bool {
+	// isOpen veirifies if circuit is open or not
 	cb.lock.Lock()
 	defer cb.lock.Unlock()
 
@@ -152,8 +150,8 @@ func isOpen(cb *CircuitBreaker) bool {
 	return false
 }
 
-// markFailure ..
 func onFail(cb *CircuitBreaker) {
+	// increment the failure counter and update state
 	cb.lock.Lock()
 	defer cb.lock.Unlock()
 
@@ -161,8 +159,8 @@ func onFail(cb *CircuitBreaker) {
 	updateState(cb)
 }
 
-// mark success ...
 func onSuccess(cb *CircuitBreaker) {
+	// increment the success counter and update state
 	cb.lock.Lock()
 	defer cb.lock.Unlock()
 
@@ -191,10 +189,6 @@ func updateState(cb *CircuitBreaker) {
 			cb.ResetCounters()
 		}
 	case stateOpen:
-		fmt.Println(cb.currentTime)
-		fmt.Println(cb.currentTime.Add(cb.openTime))
-		fmt.Println(cb.currentTime.Add(cb.openTime).After(time.Now()))
-
 		if cb.currentTime.Add(cb.openTime).Before(time.Now()) {
 			cb.currentState = stateHalfOpen
 			cb.currentTime = time.Now()
@@ -203,6 +197,8 @@ func updateState(cb *CircuitBreaker) {
 	}
 }
 
+// ResetCounters reset the counters for the circuit
+// It is invoked when state changes.
 func (cb *CircuitBreaker) ResetCounters() {
 	cb.counters.Failure = 0
 	cb.counters.Success = 0
