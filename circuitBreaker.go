@@ -10,6 +10,9 @@
 	Circuit remains in open state for OpenTime duration and then changes
 	to half-open state where the service is monitored.
 
+	OpenCircuit function is used to open the circuit from half-open state
+	based on the circuit counters.
+
 	UnTrip function is used to close the circuit from half-open state based on
 	the circuit counters.
 	Ex. if success/(fail+success) > 0.9, untrip circuit if tripped.
@@ -64,6 +67,9 @@ type CircuitBreaker struct {
 	// func to transit circuit state from half-open to close state
 	untripCircuit func(CircuitCounters) bool
 
+	// func to transit circuit state from half-open to open state
+	openCircuit func(CircuitCounters) bool
+
 	// time duration for circuit to be in open state before transit
 	// to half-open state
 	openTime time.Duration
@@ -109,6 +115,12 @@ func NewDefaultCircuitBreaker() *CircuitBreaker {
 			}
 			return false
 		},
+		openCircuit: func(counter CircuitCounters) bool {
+			if counter.Failure > 0 {
+				return true
+			}
+			return false
+		},
 
 		openTime: 1 * time.Second,
 		counters: &CircuitCounters{},
@@ -117,7 +129,7 @@ func NewDefaultCircuitBreaker() *CircuitBreaker {
 }
 
 // NewCircuitBreaker returns circuitbreaker with custom settings
-func NewCircuitBreaker(circuitName string, tripFunc, untripFunc func(CircuitCounters) bool, openT int) *CircuitBreaker {
+func NewCircuitBreaker(circuitName string, tripFunc, untripFunc, openFunc func(CircuitCounters) bool, openT int) *CircuitBreaker {
 	return &CircuitBreaker{
 		circuitName:  circuitName,
 		currentState: stateClose,
@@ -125,10 +137,10 @@ func NewCircuitBreaker(circuitName string, tripFunc, untripFunc func(CircuitCoun
 
 		tripCircuit:   tripFunc,
 		untripCircuit: untripFunc,
-
-		openTime: time.Duration(openT) * time.Second,
-		counters: &CircuitCounters{},
-		lock:     &sync.Mutex{},
+		openCircuit:   openFunc,
+		openTime:      time.Duration(openT) * time.Second,
+		counters:      &CircuitCounters{},
+		lock:          &sync.Mutex{},
 	}
 }
 
@@ -202,7 +214,7 @@ func updateState(cb *CircuitBreaker) {
 			cb.ResetCounters()
 		}
 	case stateHalfOpen:
-		if cb.counters.Failure > 0 {
+		if cb.openCircuit(*cb.counters) {
 			cb.currentState = stateOpen
 			cb.currentTime = time.Now()
 			cb.ResetCounters()

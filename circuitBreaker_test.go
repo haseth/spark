@@ -22,7 +22,7 @@ func TestNewCircuitBreaker(t *testing.T) {
 	/*
 		Testing Circuit Breaker with custom settings
 	*/
-	cb := NewCircuitBreaker("my-circuit", testTripFunc, testUntripFunc, 2)
+	cb := NewCircuitBreaker("my-circuit", testTripFunc, testUntripFunc, testOpenFunc, 2)
 
 	assert.Equal(t, cb.openTime, 2*time.Second, "correct open timeout")
 	assert.Equal(t, cb.circuitName, "my-circuit", "correct service name")
@@ -128,7 +128,7 @@ func TestSpark_CustomSettings(t *testing.T) {
 	// setup
 	openTime := 2
 	// Circuit Breaker with user-defined custom settings
-	cb := NewCircuitBreaker("Service-A", testTripFunc, testUntripFunc, openTime)
+	cb := NewCircuitBreaker("Service-A", testTripFunc, testUntripFunc, testOpenFunc, openTime)
 
 	// TEST-1
 	// Circuit in initial close state and would try a request
@@ -276,6 +276,13 @@ func testUntripFunc(counter CircuitCounters) bool {
 	success := float64(counter.Success)
 
 	if (fail+success > 0) && success/(fail+success) > 0.50 {
+		return true
+	}
+	return false
+}
+
+func testOpenFunc(counter CircuitCounters) bool {
+	if counter.Failure > 0 {
 		return true
 	}
 	return false
