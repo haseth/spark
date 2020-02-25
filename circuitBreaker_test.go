@@ -13,9 +13,9 @@ func TestNewDefaultCircuitBreaker(t *testing.T) {
 	*/
 	cb := NewDefaultCircuitBreaker()
 
-	assert.Equal(t, cb.openTime, 1*time.Second, "Got correct open timeout")
-	assert.Equal(t, cb.circuitName, "Service-B Proxy", "Got correct service name")
-	assert.Equal(t, cb.currentState, stateClose, "Deafult state is closed")
+	assert.Equal(t, cb.openTime, 1*time.Second, "correct open timeout")
+	assert.Equal(t, cb.circuitName, "Service-B Proxy", "correct service name")
+	assert.Equal(t, cb.currentState, stateClose, "correct current state")
 }
 
 func TestNewCircuitBreaker(t *testing.T) {
@@ -24,9 +24,9 @@ func TestNewCircuitBreaker(t *testing.T) {
 	*/
 	cb := NewCircuitBreaker("my-circuit", testTripFunc, testUntripFunc, 2)
 
-	assert.Equal(t, cb.openTime, 2*time.Second, "Got correct open timeout")
-	assert.Equal(t, cb.circuitName, "my-circuit", "Got correct service name")
-	assert.Equal(t, cb.currentState, stateClose, "Deafult state is closed")
+	assert.Equal(t, cb.openTime, 2*time.Second, "correct open timeout")
+	assert.Equal(t, cb.circuitName, "my-circuit", "correct service name")
+	assert.Equal(t, cb.currentState, stateClose, "correct circuit state")
 }
 
 func TestSpark_DefaultSettings(t *testing.T) {
@@ -45,9 +45,9 @@ func TestSpark_DefaultSettings(t *testing.T) {
 	_, err := cb.Spark(doSuccessCall)
 
 	// validate if success counter increases
-	assert.Nil(t, err, "Received no error")
-	assert.NotZero(t, cb.counters, &CircuitCounters{Failure: 0, Success: 1, Timeout: 0, Rejection: 0}, "Success calls should be incremented")
-	assert.Equal(t, cb.currentState, stateClose, "State should be closed after successful requests")
+	assert.Nil(t, err, "no error in success call")
+	assert.NotZero(t, cb.counters, &CircuitCounters{Failure: 0, Success: 1, Timeout: 0, Rejection: 0}, "Success circuitcounter should be incremented")
+	assert.Equal(t, cb.currentState, stateClose, "State should remain closed after successful requests")
 
 	// TEST-2
 	// Circuit in close state with 1 success counter circuit.
@@ -61,8 +61,8 @@ func TestSpark_DefaultSettings(t *testing.T) {
 	// validate that circuit tripped
 	assert.NotNil(t, err, "Received error from fail call")
 	assert.Equal(t, err, errFailed, "Error in sending request")
-	assert.Equal(t, cb.counters, &CircuitCounters{Failure: 0, Success: 0, Timeout: 0, Rejection: 0}, "State should be closed after successful requests")
-	assert.Equal(t, cb.currentState, stateOpen, "Circuit should trip if error rate exceeds 50%")
+	assert.Equal(t, cb.counters, &CircuitCounters{Failure: 0, Success: 0, Timeout: 0, Rejection: 0}, "Counters should be reset after state change")
+	assert.Equal(t, cb.currentState, stateOpen, "Circuit should trip if error rate exceeds 49%")
 
 	// TEST-3
 	// Request should fail if circuit in open state.
@@ -71,10 +71,10 @@ func TestSpark_DefaultSettings(t *testing.T) {
 	_, err = cb.Spark(doSuccessCall)
 
 	// validate request should fail as circuit in open state
-	assert.NotNil(t, err, "Received error from success call")
+	assert.NotNil(t, err, "no error in successful calls")
 	assert.Equal(t, err, errOpen, "Circuit in open state should fail request")
-	assert.Equal(t, cb.counters, &CircuitCounters{Failure: 0, Success: 0, Timeout: 0, Rejection: 0}, "State should be closed after successful requests")
-	assert.Equal(t, cb.currentState, stateOpen, "Circuit should trip if error rate exceeds 50%")
+	assert.Equal(t, cb.counters, &CircuitCounters{Failure: 0, Success: 0, Timeout: 0, Rejection: 0}, "Counters should be reset after state change")
+	assert.Equal(t, cb.currentState, stateOpen, "Circuit should be in open state for openTimeout Duration")
 
 	// TEST-4
 	// Circuit should change state from open to half-open
@@ -90,9 +90,9 @@ func TestSpark_DefaultSettings(t *testing.T) {
 	// validate if circuit tripped to open state with even
 	// 1 fail request in half-open state
 	assert.NotNil(t, err, "Received error from fail call")
-	assert.Equal(t, err, errFailed, "Circuit in open state should fail request")
-	assert.Equal(t, cb.counters, &CircuitCounters{Failure: 0, Success: 0, Timeout: 0, Rejection: 0}, "State should be closed after successful requests")
-	assert.Equal(t, cb.currentState, stateOpen, "Circuit should trip if error rate exceeds 50%")
+	assert.Equal(t, err, errFailed, "error from failed request")
+	assert.Equal(t, cb.counters, &CircuitCounters{Failure: 0, Success: 0, Timeout: 0, Rejection: 0}, "Counters should be reset after state change")
+	assert.Equal(t, cb.currentState, stateOpen, "Circuit should trip if requests in half-open state fail")
 
 	// TEST-5
 	// Circuit should change state from open to half-open
@@ -107,7 +107,7 @@ func TestSpark_DefaultSettings(t *testing.T) {
 	_, err = cb.Spark(doSuccessCall)
 
 	// validate if success request transit state from half-open to close
-	assert.Equal(t, cb.counters, &CircuitCounters{Failure: 0, Success: 0, Timeout: 0, Rejection: 0}, "State should be closed after successful requests")
+	assert.Equal(t, cb.counters, &CircuitCounters{Failure: 0, Success: 0, Timeout: 0, Rejection: 0}, "Counters should be reset after state change")
 	assert.Equal(t, cb.currentState, stateClose, "Circuit should trip if error rate exceeds 50%")
 
 	// TEST-6
@@ -116,7 +116,7 @@ func TestSpark_DefaultSettings(t *testing.T) {
 
 	// assert.Panics(t, func() { cb.Spark(doPanicCall) }, "Received error from fail call")
 	// assert.Equal(t, cb.currentState, stateOpen, "Circuit should trip if error rate exceeds 50%")
-	// assert.Equal(t, cb.counters, &CircuitCounters{Failure: 0, Success: 0, Timeout: 0, Rejection: 0}, "State should be closed after successful requests")
+	// assert.Equal(t, cb.counters, &CircuitCounters{Failure: 0, Success: 0, Timeout: 0, Rejection: 0}, "Counters should be reset after state change")
 }
 
 func TestSpark_CustomSettings(t *testing.T) {
@@ -138,7 +138,7 @@ func TestSpark_CustomSettings(t *testing.T) {
 	_, err := cb.Spark(doSuccessCall)
 
 	// validate if success counter increases
-	assert.Nil(t, err, "Received no error")
+	assert.Nil(t, err, "no error in success call")
 	assert.NotZero(t, cb.counters, &CircuitCounters{Failure: 0, Success: 1, Timeout: 0, Rejection: 0}, "Success calls should be incremented")
 	assert.Equal(t, cb.currentState, stateClose, "State should be closed after successful requests")
 
@@ -171,7 +171,7 @@ func TestSpark_CustomSettings(t *testing.T) {
 	_, err = cb.Spark(doSuccessCall)
 
 	// validate request should fail as circuit in open state
-	assert.NotNil(t, err, "Received error from success call")
+	assert.NotNil(t, err, "no error in successful calls")
 	assert.Equal(t, cb.counters, &CircuitCounters{Failure: 0, Success: 0, Timeout: 0, Rejection: 0}, "State should be closed after successful requests")
 	assert.Equal(t, cb.currentState, stateOpen, "Circuit should trip if error rate exceeds 50%")
 
